@@ -49,14 +49,31 @@ Intended for internal use only.")
   "Parse response stream for the Ollama API."
   (when (and (bobp) (re-search-forward "^{" nil t))
     (forward-line 0))
-  (let* ((content-strs) (content) (pt (point)))
+  (let* ((content-strs)
+         (reasoning-strs)
+         (reasoning-block (plist-get info :reasoning-block))
+         (reasoning-field (plist-get info :reasoning-field))
+         (in-reasoning (eq reasoning-block 'in))
+         (end-reasoning)
+         (content)
+         (pt (point)))
     (condition-case nil
         (while (setq content (gptel--json-read))
           (setq pt (point))
           (let ((done (map-elt content :done))
-                (response (map-nested-elt content '(:message :content))))
+                (response (map-nested-elt content '(:message :content)))
+                (reasoning (map-nested-elt content '(:message :thinking))))
+
             (when (and response (not (eq response :null)))
               (push response content-strs))
+            (when (and reasoning (not (eq reasoning :null)))
+              (unless reasoning-field
+                (setq reasoning-field t)
+                (plist-put info :reasoning-field t))
+              (setq in-reasoning t)
+              (push reasoning reasoning-strs))
+            (when (and in-reasoning (not reasoning))
+              (setq end-reasoning t))
             (unless (eq done :json-false)
               (with-current-buffer (plist-get info :buffer)
                 (cl-incf gptel--ollama-token-count
@@ -64,6 +81,14 @@ Intended for internal use only.")
                             (or (map-elt content :eval_count) 0))))
               (goto-char (point-max)))))
       (error (goto-char pt)))
+    (when reasoning-strs
+      (plist-put info :reasoning
+                 (concat (plist-get info :reasoning)
+                         (apply #'concat (nreverse reasoning-strs)))))
+    (when reasoning-field
+      (message "reasoning field"))
+    (when (and reasoning-field (eq reasoning-block 'in) end-reasoning)
+      (plist-put info :reasoning-block t))
     (apply #'concat (nreverse content-strs))))
 
 (cl-defmethod gptel--parse-response ((_backend gptel-ollama) response info)
@@ -346,5 +371,3 @@ Example:
 
 (provide 'gptel-ollama)
 ;;; gptel-ollama.el ends here
-
-
