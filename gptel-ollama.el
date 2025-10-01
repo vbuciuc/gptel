@@ -62,7 +62,19 @@ Intended for internal use only.")
           (setq pt (point))
           (let ((done (map-elt content :done))
                 (response (map-nested-elt content '(:message :content)))
-                (reasoning (map-nested-elt content '(:message :thinking))))
+                (reasoning (map-nested-elt content '(:message :thinking)))
+                (tool-calls (map-nested-elt content '(:message :tool_calls))))
+
+            (when (and tool-calls (not (eq tool-calls :null)))
+              (cl-loop
+               for tool-call across tool-calls  ;replace ":arguments" with ":args"
+               for call-spec = (copy-sequence (plist-get tool-call :function))
+               do (plist-put call-spec :args
+                             (plist-get call-spec :arguments))
+               (plist-put call-spec :arguments nil)
+               collect call-spec into tool-use
+               finally
+               (plist-put info :tool-use (append (plist-get info :tool-use) tool-use))))
 
             (when (and response (not (eq response :null)))
               (push response content-strs))
@@ -85,10 +97,10 @@ Intended for internal use only.")
       (plist-put info :reasoning
                  (concat (plist-get info :reasoning)
                          (apply #'concat (nreverse reasoning-strs)))))
-    (when reasoning-field
-      (message "reasoning field"))
+
     (when (and reasoning-field (eq reasoning-block 'in) end-reasoning)
-      (plist-put info :reasoning-block t))
+      (plist-put info :reasoning-block t)
+      (plist-put info :reasoning-field nil))
     (apply #'concat (nreverse content-strs))))
 
 (cl-defmethod gptel--parse-response ((_backend gptel-ollama) response info)
