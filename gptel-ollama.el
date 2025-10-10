@@ -110,7 +110,8 @@ Store response metadata in state INFO."
   (plist-put info :stop-reason (plist-get response :done_reason))
   (plist-put info :output-tokens (plist-get response :eval_count))
   (let* ((message (plist-get response :message))
-         (content (plist-get message :content)))
+         (content (plist-get message :content))
+         (thinking (plist-get message :thinking)))
     (when-let* ((tool-calls (plist-get message :tool_calls)))
       ;; First add the tool call to the prompts list
       (let* ((data (plist-get info :data))
@@ -125,6 +126,8 @@ Store response metadata in state INFO."
        (plist-put call-spec :arguments nil)
        collect call-spec into tool-use
        finally (plist-put info :tool-use tool-use)))
+    (when (and thinking (not (or (eq thinking :null) (string-empty-p thinking))))
+      (plist-put info :reasoning (concat (plist-get info :reasoning ) thinking)))
     (when (and content (not (or (eq content :null) (string-empty-p content))))
       content)))
 
@@ -151,8 +154,7 @@ Store response metadata in state INFO."
     (when (and gptel-use-tools gptel-tools)
       ;; TODO(tool): Find out how to force tool use for Ollama
       (plist-put prompts-plist :tools
-                 (gptel--parse-tools backend gptel-tools))
-      (plist-put prompts-plist :stream :json-false))
+                 (gptel--parse-tools backend gptel-tools)))
     ;; if the temperature and max-tokens aren't set as
     ;; backend/model-specific, use the global settings
     (when (and gptel-temperature (not (plist-get options-plist :temperature)))
