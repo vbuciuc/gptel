@@ -196,12 +196,17 @@ information if the stream contains it."
           (save-match-data
             (if (looking-at " *\\[DONE\\]")
                 ;; The stream has ended, so we do the following thing (if we found tool calls)
+                ;; - if there's reasoning pack reasoning into the messages prompts list to send ( INFO -> :data -> :messages)
                 ;; - pack tool calls into the messages prompts list to send (INFO -> :data -> :messages)
                 ;; - collect tool calls (formatted differently) into (INFO -> :tool-use)
                 (when-let* ((tool-use (plist-get info :tool-use))
                             (args (apply #'concat (nreverse (plist-get info :partial_json))))
                             (func (plist-get (car tool-use) :function)))
                   (plist-put func :arguments args) ;Update arguments for last recorded tool
+                  (when-let* ((reasoning (plist-get info :reasoning-acc)))
+                    (gptel--inject-prompt
+                     (plist-get info :backend) (plist-get info :data)
+                     `(:role "assistant" :content "" :reasoning ,reasoning)))
                   (gptel--inject-prompt
                    (plist-get info :backend) (plist-get info :data)
                    `(:role "assistant" :content :null :tool_calls ,(vconcat tool-use))) ; :refusal :null
