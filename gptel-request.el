@@ -1658,7 +1658,7 @@ MACHINE is an instance of `gptel-fsm'"
   ;; a second network request: gptel tests for the presence of these flags to
   ;; handle state transitions.  (NOTE: Don't add :token to this.)
   (let ((info (gptel-fsm-info fsm)))
-    (dolist (key '(:tool-success :tool-use :error :http-status :reasoning))
+    (dolist (key '(:tool-success :tool-use :error :http-status :reasoning :reasoning-acc))
       (when (plist-get info key)
         (plist-put info key nil))))
   (funcall
@@ -2738,6 +2738,7 @@ PROCESS and _STATUS are process parameters."
                   (funcall callback (cons 'reasoning reasoning) proc-info)
                   (unless reasoning-block ;Record that we're in a reasoning block (#709)
                     (plist-put proc-info :reasoning-block 'in))
+                  (plist-put proc-info :reasoning-acc (concat (plist-get proc-info :reasoning-acc) reasoning))
                   (plist-put proc-info :reasoning nil)) ;Reset for next parsing round
                  ((and (string-blank-p response) ;Defer checking if response is blank
                        (not reasoning-block))) ;unless we're in a reasoning block already
